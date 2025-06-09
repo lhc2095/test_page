@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>单词翻翻卡消消乐</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: #FFF8F0; /* 奶白色背景 */
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+        }
+        
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        
+        .game-container {
+            width: 90%;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        
+        .cards-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+        
+        .card {
+            height: 120px;
+            perspective: 1000px;
+            cursor: pointer;
+        }
+        
+        .card-inner {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            transition: transform 0.6s;
+            transform-style: preserve-3d;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            border-radius: 10px;
+        }
+        
+        .card.flipped .card-inner {
+            transform: rotateY(180deg);
+        }
+        
+        .card.matched {
+            visibility: hidden;
+            opacity: 0;
+            transition: visibility 0s 0.5s, opacity 0.5s linear;
+        }
+        
+        .card-front, .card-back {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            backface-visibility: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 10px;
+            padding: 10px;
+            box-sizing: border-box;
+            text-align: center;
+        }
+        
+        .card-front {
+            background: linear-gradient(135deg, #6e8efb, #a777e3);
+            color: white;
+            font-weight: bold;
+            font-size: 1.2em;
+            transform: rotateY(180deg);
+        }
+        
+        .card-back {
+            background: linear-gradient(135deg, #f5f7fa, #c3cfe2);
+            color: #333;
+            font-size: 1.5em;
+            font-weight: bold;
+        }
+        
+        .next-button {
+            padding: 12px 30px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 1.2em;
+            cursor: pointer;
+            margin-top: 20px;
+            display: none;
+        }
+        
+        .next-button:hover {
+            background-color: #45a049;
+        }
+        
+        .timer {
+            font-size: 1.5em;
+            margin-bottom: 20px;
+            color: #333;
+        }
+        
+        .round-info {
+            font-size: 1.2em;
+            margin-bottom: 20px;
+            color: #555;
+        }
+        
+        .round-time {
+            font-size: 1.2em;
+            margin: 10px 0;
+            color: #555;
+            display: none;
+        }
+        
+        .success-message {
+            font-size: 2em;
+            color: #4CAF50;
+            text-align: center;
+            margin-top: 30px;
+            display: none;
+        }
+        
+        .final-time {
+            font-size: 1.5em;
+            color: #333;
+            text-align: center;
+            margin-top: 20px;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <h1>单词翻翻卡消消乐</h1>
+    <div class="game-container">
+        <div class="timer">时间: <span id="time">00:00</span></div>
+        <div class="round-info">第 <span id="current-round">1</span> 轮 / 共 4 轮</div>
+        <div class="round-time" id="round-time">本轮用时: <span id="current-round-time">00:00</span></div>
+        <div class="cards-grid" id="cards-grid"></div>
+        <button class="next-button" id="next-button">다음</button>
+        <div class="success-message" id="success-message">恭喜你挑战成功!</div>
+        <div class="final-time" id="final-time">完成时间: <span id="total-time">00:00</span></div>
+    </div>
+
+    <script>
+        // 游戏词汇库
+        const vocabulary = [
+            { korean: "안경", chinese: "眼镜" },
+            { korean: "넥타이", chinese: "领带" },
+            { korean: "셔츠", chinese: "衬衫" },
+            { korean: "손목시계", chinese: "手表" },
+            { korean: "가방", chinese: "包" },
+            { korean: "벨트", chinese: "腰带" },
+            { korean: "바지", chinese: "裤子" },
+            { korean: "목걸이", chinese: "项链" },
+            { korean: "모자", chinese: "帽子" },
+            { korean: "티셔츠", chinese: "t恤衫" },
+            { korean: "반지", chinese: "戒指" },
+            { korean: "치마", chinese: "裙子" },
+            { korean: "신발", chinese: "鞋" },
+            { korean: "구두", chinese: "皮鞋" },
+            { korean: "운동화", chinese: "运动鞋" },
+            { korean: "사이즈", chinese: "尺码" },
+            { korean: "딱 맞다", chinese: "正好" },
+            { korean: "길다", chinese: "长" },
+            { korean: "짧다", chinese: "短" },
+            { korean: "얇다", chinese: "薄" },
+            { korean: "두껍다", chinese: "厚" }
+        ];
+
+        // 游戏状态
+        let gameState = {
+            currentRound: 1,
+            totalRounds: 4,
+            cards: [],
+            flippedCards: [],
+            matchedPairs: 0,
+            startTime: null,
+            timerInterval: null,
+            currentRoundStartTime: null,
+            totalGameTime: 0,
+            roundTimes: []
+        };
+
+        // DOM元素
+        const cardsGrid = document.getElementById('cards-grid');
+        const nextButton = document.getElementById('next-button');
+        const successMessage = document.getElementById('success-message');
+        const finalTime = document.getElementById('final-time');
+        const totalTimeDisplay = document.getElementById('total-time');
+        const timeDisplay = document.getElementById('time');
+        const currentRoundDisplay = document.getElementById('current-round');
+        const roundTimeDisplay = document.getElementById('round-time');
+        const currentRoundTimeDisplay = document.getElementById('current-round-time');
+
+        // 初始化游戏
+        function initGame() {
+            gameState.currentRound = 1;
+            gameState.totalGameTime = 0;
+            gameState.roundTimes = [];
+            currentRoundDisplay.textContent = gameState.currentRound;
+            startNewRound();
+        }
+
+        // 开始新的一轮
+        function startNewRound() {
+            gameState.cards = [];
+            gameState.flippedCards = [];
+            gameState.matchedPairs = 0;
+            gameState.currentRoundStartTime = new Date().getTime();
+            
+            // 如果是第一轮，开始计时
+            if (gameState.currentRound === 1) {
+                gameState.startTime = new Date().getTime();
+                startTimer();
+            }
+            
+            // 清空卡片网格
+            cardsGrid.innerHTML = '';
+            
+            // 隐藏本轮用时
+            roundTimeDisplay.style.display = 'none';
+            
+            // 创建卡片对
+            createCardPairs();
+            
+            // 显示卡片内容10秒
+            showCardsInitially();
+            
+            // 隐藏下一轮按钮
+            nextButton.style.display = 'none';
+        }
+
+        // 创建卡片对
+        function createCardPairs() {
+            // 从词汇库中随机选择8对词汇
+            const shuffledVocabulary = [...vocabulary].sort(() => 0.5 - Math.random());
+            const selectedPairs = shuffledVocabulary.slice(0, 8);
+            
+            // 创建卡片数组（每对2张卡片）
+            const cardContents = [];
+            selectedPairs.forEach(pair => {
+                cardContents.push({ type: 'korean', content: pair.korean, pairId: pair.korean });
+                cardContents.push({ type: 'chinese', content: pair.chinese, pairId: pair.korean });
+            });
+            
+            // 随机排序卡片
+            gameState.cards = cardContents.sort(() => 0.5 - Math.random());
+            
+            // 创建卡片元素
+            gameState.cards.forEach((card, index) => {
+                const cardElement = document.createElement('div');
+                cardElement.className = 'card';
+                cardElement.dataset.index = index;
+                
+                const cardInner = document.createElement('div');
+                cardInner.className = 'card-inner';
+                
+                const cardFront = document.createElement('div');
+                cardFront.className = 'card-front';
+                cardFront.textContent = card.content;
+                cardFront.style.fontSize = getFontSize(card.content);
+                
+                // 随机生成卡片背景颜色
+                const hue = Math.floor(Math.random() * 360);
+                cardFront.style.background = `linear-gradient(135deg, hsl(${hue}, 80%, 60%), hsl(${hue + 30}, 80%, 50%))`;
+                
+                const cardBack = document.createElement('div');
+                cardBack.className = 'card-back';
+                cardBack.textContent = '?';
+                
+                cardInner.appendChild(cardFront);
+                cardInner.appendChild(cardBack);
+                cardElement.appendChild(cardInner);
+                
+                cardElement.addEventListener('click', () => flipCard(cardElement, index));
+                cardsGrid.appendChild(cardElement);
+            });
+        }
+
+        // 根据内容长度调整字体大小
+        function getFontSize(content) {
+            const length = content.length;
+            if (length <= 4) return '1.5em';
+            if (length <= 6) return '1.3em';
+            if (length <= 8) return '1.1em';
+            return '0.9em';
+        }
+
+        // 初始显示卡片10秒
+        function showCardsInitially() {
+            const cards = document.querySelectorAll('.card');
+            cards.forEach(card => {
+                card.classList.add('flipped');
+            });
+            
+            setTimeout(() => {
+                cards.forEach(card => {
+                    card.classList.remove('flipped');
+                });
+            }, 10000);
+        }
+
+        // 翻转卡片
+        function flipCard(cardElement, index) {
+            // 如果卡片已经匹配或已经翻转，则不做任何操作
+            if (cardElement.classList.contains('matched') || 
+                cardElement.classList.contains('flipped') || 
+                gameState.flippedCards.length >= 2) {
+                return;
+            }
+            
+            // 翻转卡片
+            cardElement.classList.add('flipped');
+            gameState.flippedCards.push({ element: cardElement, index });
+            
+            // 如果翻转了两张卡片，检查是否匹配
+            if (gameState.flippedCards.length === 2) {
+                checkForMatch();
+            }
+        }
+
+        // 检查卡片是否匹配
+        function checkForMatch() {
+            const [card1, card2] = gameState.flippedCards;
+            const cardData1 = gameState.cards[card1.index];
+            const cardData2 = gameState.cards[card2.index];
+            
+            // 检查是否匹配（pairId相同）
+            if (cardData1.pairId === cardData2.pairId) {
+                // 匹配成功
+                card1.element.classList.add('matched');
+                card2.element.classList.add('matched');
+                gameState.matchedPairs++;
+                
+                // 检查是否完成当前轮次
+                if (gameState.matchedPairs === 8) {
+                    roundCompleted();
+                }
+            } else {
+                // 不匹配，翻转回去
+                setTimeout(() => {
+                    card1.element.classList.remove('flipped');
+                    card2.element.classList.remove('flipped');
+                }, 1000);
+            }
+            
+            // 清空翻转的卡片数组
+            gameState.flippedCards = [];
+        }
+
+        // 当前轮次完成
+        function roundCompleted() {
+            // 计算本轮用时并保存
+            const roundTime = Math.floor((new Date().getTime() - gameState.currentRoundStartTime) / 1000);
+            gameState.roundTimes.push(roundTime);
+            gameState.totalGameTime += roundTime;
+            
+            // 显示本轮用时
+            const minutes = Math.floor(roundTime / 60);
+            const seconds = roundTime % 60;
+            currentRoundTimeDisplay.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+            roundTimeDisplay.style.display = 'block';
+            
+            // 如果是最后一轮，游戏结束
+            if (gameState.currentRound === gameState.totalRounds) {
+                gameCompleted();
+            } else {
+                // 显示下一轮按钮
+                nextButton.style.display = 'block';
+            }
+        }
+
+        // 下一轮
+        nextButton.addEventListener('click', () => {
+            gameState.currentRound++;
+            currentRoundDisplay.textContent = gameState.currentRound;
+            startNewRound();
+        });
+
+        // 游戏完成
+        function gameCompleted() {
+            // 停止计时器
+            stopTimer();
+            
+            // 显示成功消息和总用时
+            successMessage.style.display = 'block';
+            finalTime.style.display = 'block';
+            
+            // 格式化总用时
+            const minutes = Math.floor(gameState.totalGameTime / 60);
+            const seconds = gameState.totalGameTime % 60;
+            totalTimeDisplay.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+        }
+
+        // 开始计时器
+        function startTimer() {
+            gameState.timerInterval = setInterval(updateTimer, 1000);
+        }
+
+        // 停止计时器
+        function stopTimer() {
+            clearInterval(gameState.timerInterval);
+        }
+
+        // 更新计时器显示
+        function updateTimer() {
+            const currentTime = new Date().getTime();
+            const elapsedSeconds = Math.floor((currentTime - gameState.startTime) / 1000);
+            
+            const minutes = Math.floor(elapsedSeconds / 60);
+            const seconds = elapsedSeconds % 60;
+            
+            timeDisplay.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+        }
+
+        // 初始化游戏
+        initGame();
+    </script>
+</body>
+</html>
